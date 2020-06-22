@@ -1,0 +1,14 @@
+{
+  "name": "Ubuntuvn Desktop",
+  "description": "Default Ubuntuvn desktop interface: Simple, clean and fast taskbar; dynamic workspace window tiling system",
+  "uuid": "ubuntuvn-desktop@ubuntuvn.com",
+  "shell-version": [
+    "3.34",
+    "3.36"
+  ],
+  "version": 3.38,
+  "url": "https://ubuntuvn.com",
+  "bindings": "org.gnome.shell.extensions.ubuntuvn-desktop.bindings",
+  "layouts": "org.gnome.shell.extensions.ubuntuvn-desktop.layouts",
+  "theme": "org.gnome.shell.extensions.ubuntuvn-desktop.theme"
+}

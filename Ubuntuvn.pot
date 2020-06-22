@@ -1,0 +1,8 @@
+
+#: prefs.js:121 prefs.js:127
+msgid "About"
+msgstr ""
+
+#: prefs.js:133 prefs.js:139
+msgid "Version"
+msgstr ""
