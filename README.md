@@ -1,6 +1,6 @@
 ### ubuntuvn-desktop-ubuntuvn.com
 # Ubuntuvn 3 gnome desktop extension
-The Ubuntuvn desktop extension is the Default desktop interface of Ubuntuvn gnome edition. Thís extension included some module and work of existing extentions
+The Ubuntuvn desktop extension is the default desktop interface of Ubuntuvn gnome edition. Thís extension included some modules and works of existing extentions
 
 Module included: material-shell@papyelgringo, extendedgestures@mpiannucci.github.com, YouTubeSearchProvider
 Inspired by: simple-task-bar@fthx, TaskBar@c0ldplasma, dynamic-panel-transparency
