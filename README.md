@@ -5,7 +5,7 @@ The Ubuntuvn desktop extension is the default desktop interface of Ubuntuvn gnom
 Module included: material-shell@papyelgringo, extendedgestures@mpiannucci.github.com, YouTubeSearchProvider
 Inspired by: simple-task-bar@fthx, TaskBar@c0ldplasma, dynamic-panel-transparency
 
-Download Ubuntuvn 3 respin at https://ubuntuvn.com/download, the Ubuntuvn desktop extension will release on extensions.gnome.org and GitHub soon.
+Download Ubuntuvn 3 respin at https://ubuntuvn.com/download
 
 
 ## Install on Ubuntu 20.04
