@@ -33,7 +33,9 @@ Activate the extension
 `gnome-extension enable ubuntuvn-desktop@ubuntuvn.com`
 
 ## Install on other distro
+
 `git clone https://github.com/vozinpro/ubuntuvn-desktop-ubuntuvn.com ~/.local/share/gnome-shell/extensions/`
+
 Activate the extension
 
 `gnome-extension enable ubuntuvn-desktop@ubuntuvn.com`
