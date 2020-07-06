@@ -83,8 +83,7 @@ Prefs.prototype = {
     init: function (schema) {
         let settings = new Lib.Settings(schema);
         this.settings = settings.getSettings();
-        let settingsDock = new Lib.Settings(schemaDock);
-        this.settingsDock = settingsDock.getSettings();
+
         let settingDesktop = new Lib.Settings(schemaDesktop);
         this.settingsDesktop = settingDesktop.getSettings();
         this.dockAvailable = false;
@@ -99,7 +98,10 @@ Prefs.prototype = {
             this.hidePanelAvaillable = true;
             this.settings.set_boolean("hide-panel-enable", this.checkEnabledExtension("hidetopbar@mathieu.bidon.ca"));
         }
-
+        if (this.dockAvailable) {
+            let settingsDock = new Lib.Settings(schemaDock);
+            this.settingsDock = settingsDock.getSettings();
+        }
     },
 
     buildPrefsWidget: function () {
