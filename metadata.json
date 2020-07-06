@@ -6,7 +6,7 @@
     "3.34",
     "3.36"
   ],
-  "version": 3.38,
+  "version": 3.39,
   "url": "https://ubuntuvn.com",
   "bindings": "org.gnome.shell.extensions.ubuntuvn-desktop.bindings",
   "layouts": "org.gnome.shell.extensions.ubuntuvn-desktop.layouts",
