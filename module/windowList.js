@@ -47,23 +47,23 @@ var WindowList = new Lang.Class({
         this.installedDock = [
             {
                 uuid: 'ubuntu-dock@ubuntu.com',
-                disable: extension => {
+                /*disable: extension => {
                     if (extension.stateObj) extension.stateObj.disable();
                 },
                 enable: extension => {
                     if (extension.stateObj) extension.stateObj.enable();
-                }
+                }*/
 
             },
             {
                 //dash-to-dock@micxgx.gmail.com
                 uuid: 'dash-to-dock@micxgx.gmail.com',
-                disable: extension => {
+                /*disable: extension => {
                     if (extension.stateObj) extension.stateObj.disable();
                 },
                 enable: extension => {
                     if (extension.stateObj) extension.stateObj.enable();
-                }
+                }*/
             }
         ];
 
@@ -470,7 +470,7 @@ var WindowList = new Lang.Class({
         for (let willDisableExtension of this.installedDock) {
             let extension = Main.extensionManager.lookup(willDisableExtension.uuid);
             if (extension) {
-                willDisableExtension.disable(extension);
+                //willDisableExtension.disable(extension);
                 Util.spawnCommandLine('gnome-extensions disable ' + willDisableExtension.uuid);
 
             }
