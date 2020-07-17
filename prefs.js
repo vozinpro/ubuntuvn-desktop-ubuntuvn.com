@@ -413,7 +413,7 @@ Prefs.prototype = {
         value2IconSize.set_value(this.settings.get_int("panel-size"));
         value2IconSize.connect("value-changed", Lang.bind(this, this.changeIconSize));
         this.gridSettings.attach(value2IconSize, 3, 3, 2, 1);
-        if (this.dockAvailable) {
+        if (this.dockAvailable && this.settingsDock !== undefined) {
             let labelDockSize = new Gtk.Label({
                 label: _("Dock Size"),
                 xalign: 0
