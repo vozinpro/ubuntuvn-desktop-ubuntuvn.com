@@ -7,7 +7,6 @@ Inspired by: simple-task-bar@fthx, TaskBar@c0ldplasma, dynamic-panel-transparenc
 
 Download Ubuntuvn 3 respin at https://ubuntuvn.com/download
 
-
 ## Install on Ubuntu 20.04
 
 Open the terminal and execute commands:
@@ -31,6 +30,9 @@ Install Ubuntuvn desktop extension
 Activate the extension
 
 `gnome-extension enable ubuntuvn-desktop@ubuntuvn.com`
+## Install on Gnome Extension
+
+https://extensions.gnome.org/extension/3264/ubuntuvn-desktop/
 
 ## Install on other distro
 
