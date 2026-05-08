@@ -27,15 +27,6 @@
         <value value="3" nick="group"/>
         <value value="4" nick="groupworkspace"/>
     </enum>
-    <enum id="org.gnome.shell.extensions.ubuntuvn-desktop.viewer">
-        <value value="0" nick="vlc"/>
-        <value value="1" nick="minitube"/>
-        <value value="2" nick="smplayer"/>
-        <value value="3" nick="umplayer"/>
-        <value value="4" nick="totem"/>
-        <value value="5" nick="miro"/>
-        <value value="6" nick="mpv"/>
-    </enum>
     <enum id="org.gnome.shell.extensions.ubuntuvn-desktop.tasks-clicks-style">
         <value value="0" nick="none"/>
         <value value="1" nick="minmax"/>
@@ -110,16 +101,6 @@
             <default><![CDATA[['<Shift><Ctrl><Alt>t']]]></default>
             <summary>Enable the window tiling system</summary>
             <description/>
-        </key>
-        <key name="max-results" type="i">
-            <default>5</default>
-            <summary>Maximum results</summary>
-            <description>Maximum number of items that should be returned in the result set. Acceptable values are 0 to 50, inclusive</description>
-        </key>
-        <key name="viewer" enum="org.gnome.shell.extensions.ubuntuvn-desktop.viewer">
-            <default>'vlc'</default>
-            <summary>YouTube viewer</summary>
-            <description>Set YouTube viewer</description>
         </key>
         <key name="extension-path" type="s">
             <default>'unset'</default>

@@ -1,434 +1,570 @@
-/* Ubuntuvn desktop extension
- * https://ubuntuvn.com
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * SPDX-License-Identifier: GPL-2.0-or-later
- */
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Meta from 'gi://Meta';
+import Shell from 'gi://Shell';
+import St from 'gi://St';
 
-/* exported init */
-const Lang = imports.lang;
-const Clutter = imports.gi.Clutter;
-const Gio = imports.gi.Gio;
-const GLib = imports.gi.GLib;
-const Meta = imports.gi.Meta;
-const Shell = imports.gi.Shell;
-const St = imports.gi.St;
-const Signals = imports.signals;
-const Main = imports.ui.main;
-const Overview = imports.ui.overview;
-const PanelBox = Main.layoutManager.panelBox;
-const Util = imports.misc.util;
-const Me = imports.misc.extensionUtils.getCurrentExtension();
-const schema = "org.gnome.shell.extensions.ubuntuvn-desktop";
-const Lib = Me.imports.lib;
-const {DisableIncompatibleExtensionsModule} = Me.imports.module.disableIncompatibleExtensionsModule;
-const {SuperWorkspaceModule} = Me.imports.module.superWorkspaceModule;
-const {HotKeysModule} = Me.imports.module.hotKeysModule;
-const {RequiredSettingsModule} = Me.imports.module.requiredSettingsModule;
-const {TilingModule} = Me.imports.module.tilingModule;
-const {StateManager} = Me.imports.stateManager;
-const ExtensionUtils = imports.misc.extensionUtils;
-const {TweaksSystemMenuExtension} = Me.imports.module.tweaksSystemMenuExtension;
-const {DynamicTransparent} = Me.imports.module.dynamicTransparent;
-const {WindowList} = Me.imports.module.windowList;
-const {GestureModule} = Me.imports.module.gestureModule;
-const {YouTubeSearchProvider} = Me.imports.module.youTubeSearchProvider;
-let disableIncompatibleExtensionsModule, tilingModules, _startupPreparedId, systemModules,injections,dynamicTransparent;
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
-class UbuntuvnDesktop {
+const PANEL_TRANSPARENT_STYLE = 'background-color: rgba(0, 0, 0, 0.07);';
+const PANEL_COLOR_UNSET = 'unset';
+const DOCK_UUIDS = ['ubuntu-dock@ubuntu.com', 'dash-to-dock@micxgx.gmail.com'];
+
+class DynamicTransparency {
     constructor() {
-        log('----------------');
-        log('CONSTRUCTOR UBUNTUVN DESKTOP');
-        log('----------------');
-        Me.stateManager = null;
-        Me.noUimode = false;
-        Me.loaded = false;
-        Me.showAppsButton = null;
-        disableIncompatibleExtensionsModule = null;
-        systemModules = null;
-        tilingModules = null;
-        injections=[];
-        Me.tilingButton = new St.Bin({
-            style_class: 'panel-button',
-            reactive: true,
-            can_focus: true,
-            x_fill: true,
-            y_fill: false,
-            track_hover: true
-        });
-        Me.tilingButtonOff = new St.Bin({
-            style_class: 'panel-button',
-            reactive: true,
-            can_focus: true,
-            x_fill: true,
-            y_fill: false,
-            track_hover: true
-        });
-        this.tilingIconOff = new St.Icon({icon_name: 'window-close-symbolic', style_class: 'system-status-icon'})
-        Me.tilingButtonOff.set_child(this.tilingIconOff);
-        Me.tilingButtonOff.connect('button-press-event', this.disable_material_shell);
-        this._shadeBackground = Overview.Overview.prototype['_shadeBackgrounds'];
+        this._signals = [];
     }
+
     enable() {
-        log('----------------');
-        log('ENABLE UBUNTUVN DESKTOP');
-        log('----------------');
-        //inject function
-        Overview.Overview.prototype['_shadeBackgrounds'] = function () {
-        };
-        Signals.addSignalMethods(Me);
-        global.materialShell = Me;
-        let settings = new Lib.Settings(schema);
-        Me.settings = settings.getSettings();
-        this.initPanelBackground(true);
-        dynamicTransparent = new DynamicTransparent();
-        systemModules = [
-            new TweaksSystemMenuExtension(),
-            new WindowList(),
-            new GestureModule(global.stage),
-            new YouTubeSearchProvider()
-        ];
-        tilingModules = [
-            new RequiredSettingsModule(),
-            new TilingModule(),
-            new SuperWorkspaceModule(),
-            new HotKeysModule(),
-        ];
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            //Then disable incompatibles extensions;
-            if (Me.settings.get_boolean("dynamic-transparent")) {
-                dynamicTransparent.enable();
-            }
-            return GLib.SOURCE_REMOVE;
-        });
-        systemModules.forEach(module => {
-            if(!Me.settings.get_boolean("dynamic-transparent") && module.hasOwnProperty('_actorSignalIds')) {
-                //do nothing
-                log("dynamic transparent disabled");
-            }
-            else {
-                module.enable();
-            }
-
-        });
-        //Reinit Extension on Param Change
-        this.setSignals();
-        this.ubuntuvnHotKey();
+        this._connect(Main.overview, 'showing', () => this.update());
+        this._connect(Main.overview, 'hiding', () => this.update());
+        this._connect(global.display, 'restacked', () => this.update());
+        this._connect(global.display, 'notify::focus-window', () => this.update());
+        this._connect(global.window_manager, 'switch-workspace', () => this.update());
+        this.update();
     }
+
     disable() {
-        log('----------------');
-        log('DISABLE UBUNTUVN DESKTOP');
-        log('----------------');
-        this.initPanelBackground(false);
-        //disable material shell
-        if (Main.panel._rightBox.get_child_at_index(1).name === "tilingAction") {
-            this.disable_material_shell();
+        for (const [object, signalId] of this._signals)
+            object.disconnect(signalId);
+
+        this._signals = [];
+    }
+
+    update() {
+        if (!Main.panel)
+            return;
+
+        if (Main.overview.visible || !Main.sessionMode.hasWindows) {
+            Main.panel.set_style(PANEL_TRANSPARENT_STYLE);
+            return;
         }
-        //disable system module
-        systemModules.reverse().forEach(module => {
-            if(!Me.settings.get_boolean("dynamic-transparent") && module.hasOwnProperty('_actorSignalIds')) {
-                //do nothing
-                log("dynamic transparent disabled");
-            }
-            else {
-                module.disable();
-            }
+
+        const activeWorkspace = global.workspace_manager.get_active_workspace();
+        const hasMaximizedWindow = activeWorkspace.list_windows().some(metaWindow => {
+            if (!metaWindow.is_on_primary_monitor())
+                return false;
+
+            if (!metaWindow.showing_on_its_workspace() || metaWindow.is_hidden())
+                return false;
+
+            if (metaWindow.get_window_type() === Meta.WindowType.DESKTOP)
+                return false;
+
+            return metaWindow.maximized_vertically;
         });
-        if (Me.settings.get_boolean("dynamic-transparent")) {
-            dynamicTransparent.disable();
-        }
-        //Disconnect Setting Signals
-        if (this.settingSignals !== null) {
-            this.settingSignals.forEach(
-                function (signal) {
-                    Me.settings.disconnect(signal);
-                },
-                this
-            );
-            this.settingSignals = null;
+
+        Main.panel.set_style(hasMaximizedWindow ? null : PANEL_TRANSPARENT_STYLE);
+    }
+
+    _connect(object, signal, callback) {
+        this._signals.push([object, object.connect(signal, callback)]);
+    }
+}
+
+class SafeTopTaskbar {
+    constructor(extension, settings) {
+        this._extension = extension;
+        this._settings = settings;
+        this._signals = [];
+        this._tracker = Shell.WindowTracker.get_default();
+        this._fallbackIcon = Gio.ThemedIcon.new('start-here-symbolic');
+        this._indicator = null;
+        this._taskBox = null;
+        this._refreshSourceId = 0;
+        this._activitiesContainer = null;
+        this._activitiesWasVisible = null;
+    }
+
+    enable() {
+        this._indicator = new PanelMenu.Button(0, 'Ubuntuvn Desktop');
+        this._indicator.add_style_class_name('ubuntuvn-taskbar');
+
+        this._taskBox = new St.BoxLayout({
+            style_class: 'ubuntuvn-taskbar-box',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._indicator.add_child(this._taskBox);
+
+        Main.panel.addToStatusArea('ubuntuvn-desktop-taskbar', this._indicator, 0, 'left');
+        this._hideActivities();
+        this._connectSignals();
+        this.refresh();
+    }
+
+    disable() {
+        for (const [object, signalId] of this._signals)
+            object.disconnect(signalId);
+
+        this._signals = [];
+
+        if (this._refreshSourceId) {
+            GLib.source_remove(this._refreshSourceId);
+            this._refreshSourceId = 0;
         }
 
-        Overview.Overview.prototype['_shadeBackgrounds'] = this._shadeBackground
-        Me.settings = null;
-        Me.initTransparent = null;
-        systemModules = null;
-        tilingModules = null;
-        delete global.materialShell;
+        this._restoreActivities();
+        this._indicator?.destroy();
+        this._indicator = null;
+        this._taskBox = null;
     }
-    _toTop() {
-        //Init the top panel
-        if (PanelBox.anchor_x !== 0 || PanelBox.anchor_y !== 0) {
-            PanelBox.set_anchor_point(0, 0);
-        }
-        if (!Main.panel.statusArea.dateMenu)
+
+    refresh() {
+        if (!this._taskBox)
             return;
-        let dateMenuContainer = Main.panel.statusArea.dateMenu.container;
 
-        let parent = dateMenuContainer.get_parent();
-        let destination;
-        if (!parent) {
+        this._taskBox.destroy_all_children();
+
+        if (this._settings.get_boolean('display-showapps-button'))
+            this._taskBox.add_child(this._createShowAppsButton());
+
+        if (!this._settings.get_boolean('display-tasks'))
             return;
-        }
-        let refSibling = null;
-        if (Me.settings.get_enum("tasks-label") !== 0) {
-            refSibling = Main.panel.statusArea.aggregateMenu ? Main.panel.statusArea.aggregateMenu.container : null;
-            destination = Main.panel._rightBox;
-        } else {
-            destination = Main.panel._centerBox;
-        }
-        if (parent != destination) {
-            parent.remove_actor(dateMenuContainer);
-            destination.add_actor(dateMenuContainer);
-        }
-        if (refSibling !== null) {
-            destination['set_child_below_sibling'](dateMenuContainer, refSibling);
-        }
-        destination.queue_relayout();
+
+        for (const group of this._listWindowGroups())
+            this._taskBox.add_child(this._createTaskButton(group));
     }
 
-    _toBottom() {
-        //Move the panel to bottom
-        let monitor = Main.layoutManager.primaryMonitor;
-        if (PanelBox.anchor_x !== 0 || PanelBox.anchor_y !== (-1) * (monitor.height - PanelBox.height)) {
-            PanelBox.set_anchor_point(0, (-1) * (monitor.height - PanelBox.height));
-            Me.settings.set_boolean("hide-panel-enable", false);
-            //Move the datetime to right panel
-            if (!Main.panel.statusArea.dateMenu)
-                return;
-            let dateMenuContainer = Main.panel.statusArea.dateMenu.container;
-
-            let parent = dateMenuContainer.get_parent();
-            let destination;
-            let refSibling = null;
-            if (!parent) {
-                return;
-            }
-            refSibling = Main.panel.statusArea.aggregateMenu ? Main.panel.statusArea.aggregateMenu.container : null;
-            destination = Main.panel._rightBox;
-            if (parent != destination) {
-                parent.remove_actor(dateMenuContainer);
-                destination.add_actor(dateMenuContainer);
-            }
-            destination['set_child_below_sibling'](dateMenuContainer, refSibling);
-            destination.queue_relayout();
-        }
+    _connectSignals() {
+        this._connect(global.display, 'restacked', () => this.scheduleRefresh());
+        this._connect(global.display, 'notify::focus-window', () => this.scheduleRefresh());
+        this._connect(global.display, 'window-created', () => this.scheduleRefresh());
+        this._connect(global.display, 'window-demands-attention', () => this.scheduleRefresh());
+        this._connect(global.display, 'window-marked-urgent', () => this.scheduleRefresh());
+        this._connect(global.workspace_manager, 'active-workspace-changed', () => this.scheduleRefresh());
+        this._connect(global.workspace_manager, 'notify::n-workspaces', () => this.scheduleRefresh());
     }
 
-    enable_material_shell() {
-        log('----------------');
-        log('ENABLE TILING');
-        log('----------------');
-        disableIncompatibleExtensionsModule = new DisableIncompatibleExtensionsModule();
-        Me.stateManager = new StateManager();
-        //disable the Dynamic transparent
-        Me.initTransparent = Me.settings.get_boolean("dynamic-transparent");
-        if (Me.initTransparent) {
-            Me.settings.set_boolean("dynamic-transparent", false);
-        }
-        Main.panel._rightBox.insert_child_at_index( Me.tilingButtonOff, 0);
-        //disable the animation
-        Main.wm._blockAnimations = true;
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            //Then disable incompatibles extensions;
-            disableIncompatibleExtensionsModule.enable();
-            Me.stateManager.loadRegistry(() => {
-                tilingModules.forEach(module => {
-                    module.enable();
-                });
-                if (Main.layoutManager._startingUp) {
-                    _startupPreparedId = Main.layoutManager.connect(
-                        'startup-complete',
-                        () => this.loaded(true)
-                    );
-                } else {
-                    this.loaded(false);
-                }
-            });
+    scheduleRefresh() {
+        if (this._refreshSourceId)
+            return;
+
+        this._refreshSourceId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._refreshSourceId = 0;
+            this.refresh();
             return GLib.SOURCE_REMOVE;
         });
-        Main.notify(
-            'Windows tiling ON',
-            `Press SUPER + SPACE to change tiling mode, SUPER + ESC to hide panel, CTRL + ALT + (UP, DOWN) to change workspace.`
-        );
     }
 
-    loaded(disconnect) {
-        if (disconnect) {
-            Main.layoutManager.disconnect(_startupPreparedId);
-        }
-        Me.loaded = true;
-        Main.wm._blockAnimations = false;
-        Me.emit('extension-loaded');
+    _connect(object, signal, callback) {
+        this._signals.push([object, object.connect(signal, callback)]);
     }
 
-    disable_material_shell() {
-        log('----------------');
-        log('DISABLE TILING');
-        log('----------------');
-        tilingModules.reverse().forEach(module => {
-            module.disable();
+    _hideActivities() {
+        const activities = Main.panel.statusArea.activities;
+        this._activitiesContainer = activities?.container ?? activities;
+
+        if (!this._activitiesContainer)
+            return;
+
+        this._activitiesWasVisible = this._activitiesContainer.visible;
+        this._activitiesContainer.hide();
+    }
+
+    _restoreActivities() {
+        if (this._activitiesContainer && this._activitiesWasVisible)
+            this._activitiesContainer.show();
+
+        this._activitiesContainer = null;
+        this._activitiesWasVisible = null;
+    }
+
+    _createShowAppsButton() {
+        const button = new St.Button({
+            style_class: 'favorite-app',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
         });
-        Me.loaded = false;
-        Me.settings.set_boolean("dynamic-transparent", Me.initTransparent);
-        Main.panel._rightBox.remove_child( Me.tilingButtonOff);
-        disableIncompatibleExtensionsModule.disable();
-        disableIncompatibleExtensionsModule = null;
-    }
-    setSignals() {
-        //Reinit Extension on Param Change
-        this.settingSignals = [
-            Me.settings.connect("changed::dynamic-transparent", Lang.bind(this, this.resetDynamicTransparent)),
-            Me.settings.connect("changed::reset-login-background", Lang.bind(this, this.resetLoginBackground)),
-            Me.settings.connect("changed::panel-background-color", Lang.bind(this, this.initPanelBackground)),
-        ];
+        button.set_child(new St.Icon({
+            gicon: this._getShowAppsIcon(),
+            icon_size: this._getIconSize(),
+        }));
+        button.connect('clicked', () => this._showApplications());
+        return button;
     }
 
-    resetLoginBackground() {
-        if (Me.settings.get_boolean("reset-login-background")) {
-            Me.settings.set_boolean("reset-login-background", false);
-            Util.spawnCommandLine('gnome-terminal -e "ubuntuvn-setting -b"');
+    _showApplications() {
+        if (Main.overview.visible) {
+            Main.overview.hide();
+            return;
+        }
 
-        }
+        Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+
+        const showAppsButton = Main.overview.dash?.showAppsButton;
+        if (showAppsButton)
+            showAppsButton.checked = true;
     }
-    resetDynamicTransparent() {
-        if (Me.settings.get_boolean("dynamic-transparent")) {
-            dynamicTransparent.enable();
-        } else {
-            dynamicTransparent.disable();
-        }
+
+    _getShowAppsIcon() {
+        const configuredIcon = this._settings.get_string('appview-button-icon');
+        const iconPath = configuredIcon && configuredIcon !== 'unset'
+            ? configuredIcon
+            : this._getDefaultLogoPath();
+
+        if (!iconPath)
+            return this._fallbackIcon;
+
+        return Gio.icon_new_for_string(iconPath);
     }
-    initPanelBackground(disable) {
-        if (Me.settings.get_string("panel-background-color") !== 'unset' && disable) {
-            this.initPanelColor = Main.panel.get_style();
-            if (Main.panel.get_style() !== null) {
-                Main.panel.set_style(Main.panel.get_style() + 'background-color:' + Me.settings.get_string("panel-background-color") + ';');
+
+    _getDefaultLogoPath() {
+        for (const path of [`${this._extension.path}/images/logo.png`, `${this._extension.path}/logo.png`]) {
+            if (Gio.File.new_for_path(path).query_exists(null))
+                return path;
+        }
+
+        return null;
+    }
+
+    _createTaskButton(group) {
+        const styleClass = group.urgent
+            ? 'urgent-app'
+            : group.focused ? 'focused-app' : 'unfocused-app';
+        const button = new St.Button({
+            style_class: styleClass,
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+        });
+        const content = new St.BoxLayout({
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const icon = group.app?.create_icon_texture(this._getIconSize()) ?? new St.Icon({
+            icon_name: 'application-x-executable-symbolic',
+            icon_size: this._getIconSize(),
+        });
+        content.add_child(icon);
+
+        if (group.windows.length > 1) {
+            content.add_child(new St.Label({
+                text: String(group.windows.length),
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+        }
+
+        const label = this._getTaskLabel(group);
+        if (label) {
+            content.add_child(new St.Label({
+                text: label,
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+        }
+
+        button.set_child(content);
+        button.connect('button-press-event', (_actor, event) => {
+            const buttonNumber = event.get_button();
+
+            if (buttonNumber === Clutter.BUTTON_PRIMARY) {
+                this._activateOrMinimizeGroup(group);
+                return Clutter.EVENT_STOP;
             }
-            else {
-                Main.panel.set_style('background-color:' + Me.settings.get_string("panel-background-color") + ';');
+
+            if (buttonNumber === Clutter.BUTTON_MIDDLE) {
+                this._closeGroupWindow(group);
+                return Clutter.EVENT_STOP;
             }
-        }
-        else {
-            Main.panel.style_class ='transparent-top-bar--solid';
+
+            return Clutter.EVENT_PROPAGATE;
+        });
+        return button;
+    }
+
+    _getTaskLabel(group) {
+        switch (this._settings.get_enum('tasks-label')) {
+        case 1:
+            return group.windows[0]?.get_title() ?? '';
+        case 2:
+            return group.app?.get_name() ?? group.windows[0]?.get_title() ?? '';
+        default:
+            return '';
         }
     }
-    ubuntuvnHotKey() {
+
+    _activateOrMinimizeGroup(group) {
+        if (group.focused) {
+            for (const metaWindow of group.windows)
+                metaWindow.minimize();
+            return;
+        }
+
+        const targetWindow = group.windows.find(metaWindow => !metaWindow.minimized) ?? group.windows[0];
+        if (targetWindow)
+            Main.activateWindow(targetWindow);
+    }
+
+    _closeGroupWindow(group) {
+        const targetWindow = group.windows.find(metaWindow => metaWindow === global.display.focus_window) ?? group.windows[0];
+        targetWindow?.delete(global.get_current_time());
+    }
+
+    _listWindowGroups() {
+        const groups = new Map();
+        for (const metaWindow of this._listWindows()) {
+            const app = this._tracker.get_window_app(metaWindow);
+            const id = app?.get_id() ?? metaWindow.get_wm_class() ?? String(metaWindow.get_pid());
+            let group = groups.get(id);
+
+            if (!group) {
+                group = {
+                    app,
+                    windows: [],
+                    focused: false,
+                    urgent: false,
+                    sequence: metaWindow.get_stable_sequence(),
+                };
+                groups.set(id, group);
+            }
+
+            group.windows.push(metaWindow);
+            group.focused ||= metaWindow === global.display.focus_window;
+            group.urgent ||= metaWindow.urgent || metaWindow.demandsAttention;
+            group.sequence = Math.min(group.sequence, metaWindow.get_stable_sequence());
+        }
+
+        return [...groups.values()].sort((a, b) => a.sequence - b.sequence);
+    }
+
+    _listWindows() {
+        const activeWorkspace = global.workspace_manager.get_active_workspace();
+        return activeWorkspace.list_windows()
+            .filter(metaWindow => !(metaWindow.is_skip_taskbar?.() ?? metaWindow.skip_taskbar))
+            .filter(metaWindow => metaWindow.get_window_type() !== Meta.WindowType.DESKTOP)
+            .sort((a, b) => a.get_stable_sequence() - b.get_stable_sequence());
+    }
+
+    _getIconSize() {
+        return Math.max(16, Math.min(32, this._settings.get_int('panel-size') - 6));
+    }
+}
+
+export default class UbuntuvnDesktopExtension extends Extension {
+    enable() {
+        this._settings = this.getSettings();
+        this._settingSignals = [];
+        this._dynamicTransparency = null;
+        this._topTaskbar = null;
+        this._shellSettings = new Gio.Settings({schema_id: 'org.gnome.shell'});
+        this._docksDisabledByUs = new Set();
+        this._hotCorner = null;
+        this._panelVisible = true;
+        this._originalPanelStyle = Main.panel?.get_style() ?? null;
+
+        this._connectSetting('changed::dynamic-transparent', () => this._syncPanelStyle());
+        this._connectSetting('changed::panel-background-color', () => this._syncPanelStyle());
+        this._connectSetting('changed::reset-login-background', () => this._resetLoginBackground());
+        this._connectSetting('changed::display-tasks', () => this._topTaskbar?.scheduleRefresh());
+        this._connectSetting('changed::display-showapps-button', () => this._topTaskbar?.scheduleRefresh());
+        this._connectSetting('changed::appview-button-icon', () => this._topTaskbar?.scheduleRefresh());
+        this._connectSetting('changed::tasks-label', () => this._topTaskbar?.scheduleRefresh());
+        this._connectSetting('changed::dock-enable', () => this._syncDockState());
+
+        this._topTaskbar = new SafeTopTaskbar(this, this._settings);
+        this._topTaskbar.enable();
+        this._addKeybindings();
+        this._enableHotCorner();
+        this._syncPanelStyle();
+        this._syncDockState();
+    }
+
+    disable() {
+        this._restoreDocks();
+        this._disableHotCorner();
+        this._removeKeybindings();
+        this._topTaskbar?.disable();
+        this._topTaskbar = null;
+        this._disableDynamicTransparency();
+
+        for (const signalId of this._settingSignals ?? [])
+            this._settings.disconnect(signalId);
+
+        this._settingSignals = [];
+
+        if (Main.panel)
+            Main.panel.set_style(this._originalPanelStyle);
+
+        if (Main.panel)
+            Main.panel.visible = true;
+
+        if (Main.layoutManager.panelBox)
+            Main.layoutManager.panelBox.visible = true;
+
+        this._settings = null;
+        this._shellSettings = null;
+        this._originalPanelStyle = null;
+        this._docksDisabledByUs = null;
+    }
+
+    _connectSetting(signal, callback) {
+        this._settingSignals.push(this._settings.connect(signal, callback));
+    }
+
+    _addKeybindings() {
         Main.wm.addKeybinding(
             'toggle-material-shell-ui',
-            Me.settings,
+            this._settings,
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-            Shell.ActionMode.NORMAL,
-            () => {
-                const noUImode = Me.noUimode;
-                Me.noUimode = !noUImode;
-                Main.panel.get_parent().visible = noUImode;
-                if (Main.panel._rightBox.get_child_at_index(1).name === "tilingAction") {
-                    global.superWorkspaceManager.noUImode = !noUImode;
-                }
-                Main.panel.visible = noUImode;
-                Main.panel
-                    .get_parent()
-                    .set_width(!noUImode ? 0 : -1);
-                Main.layoutManager.panelBox.visible = noUImode;
-                Main.layoutManager.panelBox.set_height(!noUImode ? 0 : -1);
-                Main.layoutManager.monitors.forEach(monitor => {
-                    Main.layoutManager._queueUpdateRegions();
-                    // if the tiling is ON
-                    if (Main.panel._rightBox.get_child_at_index(1).name === "tilingAction") {
-                        let superWorkspace;
-                        if (Main.layoutManager.primaryIndex === monitor.index) {
-                            superWorkspace = global.superWorkspaceManager.getActiveSuperWorkspace();
-                        } else {
-                            superWorkspace = global.superWorkspaceManager.getSuperWorkspacesOfMonitorIndex(
-                                monitor.index
-                            )[0];
-                        }
-                        superWorkspace.updateUI();
-                        superWorkspace.panel.set_height(!noUImode ? 0 : -1);
-                        superWorkspace.tilingLayout.onTile();
-                    }
-                });
-            }
+            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+            () => this._togglePanelVisibility()
         );
+
         Main.wm.addKeybinding(
             'enable-window-tiling',
-            Me.settings,
+            this._settings,
             Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-            Shell.ActionMode.NORMAL,
-            () => {
-                if (Main.panel._rightBox.get_child_at_index(1).name === "tilingAction") {
-                    this.disable_material_shell();
-                }
-                else {
-                    this.enable_material_shell();
-                }
-            }
+            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+            () => this._showLegacyTilingNotice()
         );
     }
 
-    init_workspace_categories() {
-        let WorkspaceCategories = {};
-        this.workspaces_count = global.workspace_manager.n_workspaces;
-        for (let workspace_index = 1; workspace_index <= this.workspaces_count; ++workspace_index) {
-            WorkspaceCategories['wp' + workspace_index] = {
-                icon: Gio.icon_new_for_string(
-                    `${Me.path}/assets/icons/package-symbolic.svg`
-                ),
-                title: 'wp' + workspace_index,
-                categoriesIncluded: [],
-                categoriesExcluded: [],
-                acceptAll: true,
-                acceptOrphans: true,
-                primary: true
+    _removeKeybindings() {
+        for (const name of ['toggle-material-shell-ui', 'enable-window-tiling']) {
+            try {
+                Main.wm.removeKeybinding(name);
+            } catch (error) {
+                console.error(`Failed to remove ${name} keybinding: ${error}`);
             }
         }
-        WorkspaceCategories['wp0'] = {
-            icon: Gio.icon_new_for_string(
-                `${Me.path}/assets/icons/package-symbolic.svg`
-            ),
-            title: 'wp0',
-            categoriesIncluded: [],
-            categoriesExcluded: [],
-            acceptAll: true,
-            acceptOrphans: true,
-            primary: false
-        }
-        return WorkspaceCategories;
     }
-}
-function injectToFunction(parent, name, func)
-{
-    let origin = parent[name];
-    parent[name] = function()
-    {
-        let ret;
-        ret = origin.apply(this, arguments);
-        if (ret === undefined)
-            ret = func.apply(this, arguments);
-        return ret;
-    }
-    return origin;
-}
 
-function removeInjection(object, injection, name)
-{
-    if (injection[name] === undefined)
-        delete object[name];
-    else
-        object[name] = injection[name];
-}
-function init() {
-    global.UbuntuvnDesktop = new UbuntuvnDesktop();
-    return global.UbuntuvnDesktop;
+    _enableHotCorner() {
+        if (this._hotCorner)
+            return;
+
+        this._hotCorner = new St.Widget({
+            reactive: true,
+            x: 0,
+            y: 0,
+            width: 3,
+            height: 3,
+        });
+        this._hotCorner.connect('enter-event', () => {
+            this._showOverview();
+            return Clutter.EVENT_PROPAGATE;
+        });
+        Main.layoutManager.addChrome(this._hotCorner, {trackFullscreen: true});
+    }
+
+    _disableHotCorner() {
+        if (!this._hotCorner)
+            return;
+
+        Main.layoutManager.removeChrome(this._hotCorner);
+        this._hotCorner.destroy();
+        this._hotCorner = null;
+    }
+
+    _showOverview() {
+        if (!Main.overview.visible)
+            Main.overview.show();
+    }
+
+    _togglePanelVisibility() {
+        this._panelVisible = !this._panelVisible;
+
+        if (Main.panel)
+            Main.panel.visible = this._panelVisible;
+
+        if (Main.layoutManager.panelBox)
+            Main.layoutManager.panelBox.visible = this._panelVisible;
+    }
+
+    _showLegacyTilingNotice() {
+        Main.notify(
+            this.metadata.name,
+            'The legacy tiling module is disabled on GNOME 50 until it is ported from private GNOME 3 APIs.'
+        );
+    }
+
+    _syncDockState() {
+        if (this._settings.get_boolean('dock-enable')) {
+            this._restoreDocks();
+            return;
+        }
+
+        this._hideDocks();
+    }
+
+    _hideDocks() {
+        const enabledExtensions = this._shellSettings.get_strv('enabled-extensions');
+        const nextEnabledExtensions = enabledExtensions.filter(uuid => {
+            if (!DOCK_UUIDS.includes(uuid))
+                return true;
+
+            this._docksDisabledByUs.add(uuid);
+            return false;
+        });
+
+        if (nextEnabledExtensions.length !== enabledExtensions.length)
+            this._shellSettings.set_strv('enabled-extensions', nextEnabledExtensions);
+    }
+
+    _restoreDocks() {
+        const disabledByUs = [...this._docksDisabledByUs ?? []];
+        if (disabledByUs.length === 0)
+            return;
+
+        const enabledExtensions = this._shellSettings.get_strv('enabled-extensions');
+        const nextEnabledExtensions = [...enabledExtensions];
+
+        for (const uuid of disabledByUs) {
+            if (!nextEnabledExtensions.includes(uuid))
+                nextEnabledExtensions.push(uuid);
+        }
+
+        this._shellSettings.set_strv('enabled-extensions', nextEnabledExtensions);
+        this._docksDisabledByUs?.clear();
+    }
+
+    _resetLoginBackground() {
+        if (!this._settings.get_boolean('reset-login-background'))
+            return;
+
+        this._settings.set_boolean('reset-login-background', false);
+        Main.notify(
+            this.metadata.name,
+            'Login background reset is unsupported on Ubuntu 26.04 because it modifies system GNOME Shell resources.'
+        );
+    }
+
+    _syncPanelStyle() {
+        if (this._settings.get_boolean('dynamic-transparent')) {
+            this._enableDynamicTransparency();
+            return;
+        }
+
+        this._disableDynamicTransparency();
+        this._applyConfiguredPanelColor();
+    }
+
+    _enableDynamicTransparency() {
+        if (!this._dynamicTransparency) {
+            this._dynamicTransparency = new DynamicTransparency();
+            this._dynamicTransparency.enable();
+        }
+
+        this._dynamicTransparency.update();
+    }
+
+    _disableDynamicTransparency() {
+        if (!this._dynamicTransparency)
+            return;
+
+        this._dynamicTransparency.disable();
+        this._dynamicTransparency = null;
+    }
+
+    _applyConfiguredPanelColor() {
+        if (!Main.panel)
+            return;
+
+        const panelColor = this._settings.get_string('panel-background-color');
+        Main.panel.set_style(panelColor !== PANEL_COLOR_UNSET ? `background-color: ${panelColor};` : this._originalPanelStyle);
+    }
 }
