@@ -8,11 +8,98 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as OverviewControls from 'resource:///org/gnome/shell/ui/overviewControls.js';
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 const PANEL_TRANSPARENT_STYLE = 'background-color: rgba(0, 0, 0, 0.07);';
 const PANEL_COLOR_UNSET = 'unset';
 const DOCK_UUIDS = ['ubuntu-dock@ubuntu.com', 'dash-to-dock@micxgx.gmail.com'];
+const GESTURE_THRESHOLD = 50;
+
+class TouchpadGestures {
+    constructor() {
+        this._signalId = 0;
+        this._dx = 0;
+        this._dy = 0;
+    }
+
+    enable() {
+        if (this._signalId)
+            return;
+
+        this._signalId = global.stage.connect('captured-event', (_actor, event) => this._handleEvent(event));
+    }
+
+    disable() {
+        if (!this._signalId)
+            return;
+
+        global.stage.disconnect(this._signalId);
+        this._signalId = 0;
+        this._dx = 0;
+        this._dy = 0;
+    }
+
+    _handleEvent(event) {
+        if (event.type() !== Clutter.EventType.TOUCHPAD_SWIPE)
+            return Clutter.EVENT_PROPAGATE;
+
+        if (event.get_touchpad_gesture_finger_count() !== 3)
+            return Clutter.EVENT_PROPAGATE;
+
+        const phase = event.get_gesture_phase();
+
+        if (phase === Clutter.TouchpadGesturePhase.UPDATE) {
+            const [dx, dy] = event.get_gesture_motion_delta();
+            this._dx += dx;
+            this._dy += dy;
+            return Clutter.EVENT_STOP;
+        }
+
+        if (phase === Clutter.TouchpadGesturePhase.END)
+            this._activateGesture();
+
+        this._dx = 0;
+        this._dy = 0;
+        return Clutter.EVENT_STOP;
+    }
+
+    _activateGesture() {
+        if (!(Main.actionMode & (Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW)))
+            return;
+
+        if (Math.hypot(this._dx, this._dy) <= GESTURE_THRESHOLD)
+            return;
+
+        if (Math.abs(this._dx) > Math.abs(this._dy)) {
+            this._toggleOverview();
+            return;
+        }
+
+        this._toggleApplications();
+    }
+
+    _toggleOverview() {
+        if (Main.overview.visible) {
+            Main.overview.hide();
+            return;
+        }
+
+        Main.overview.show();
+    }
+
+    _toggleApplications() {
+        const showAppsButton = Main.overview.dash?.showAppsButton;
+
+        if (Main.overview.visible && showAppsButton?.checked) {
+            Main.overview.hide();
+            return;
+        }
+
+        Main.overview.show(OverviewControls.ControlsState.APP_GRID);
+
+        if (showAppsButton)
+            showAppsButton.checked = true;
+    }
+}
 
 class DynamicTransparency {
     constructor() {
@@ -81,8 +168,10 @@ class SafeTopTaskbar {
     }
 
     enable() {
-        this._indicator = new PanelMenu.Button(0, 'Ubuntuvn Desktop');
-        this._indicator.add_style_class_name('ubuntuvn-taskbar');
+        this._indicator = new St.BoxLayout({
+            style_class: 'ubuntuvn-taskbar',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
 
         this._taskBox = new St.BoxLayout({
             style_class: 'ubuntuvn-taskbar-box',
@@ -91,7 +180,7 @@ class SafeTopTaskbar {
         });
         this._indicator.add_child(this._taskBox);
 
-        Main.panel.addToStatusArea('ubuntuvn-desktop-taskbar', this._indicator, 0, 'left');
+        Main.panel._leftBox.insert_child_at_index(this._indicator, 0);
         this._hideActivities();
         this._connectSignals();
         this.refresh();
@@ -109,6 +198,11 @@ class SafeTopTaskbar {
         }
 
         this._restoreActivities();
+
+        const indicatorParent = this._indicator?.get_parent();
+        if (indicatorParent)
+            indicatorParent.remove_child(this._indicator);
+
         this._indicator?.destroy();
         this._indicator = null;
         this._taskBox = null;
@@ -185,19 +279,26 @@ class SafeTopTaskbar {
             gicon: this._getShowAppsIcon(),
             icon_size: this._getIconSize(),
         }));
-        button.connect('clicked', () => this._showApplications());
+        button.connect('button-press-event', (_actor, event) => {
+            if (event.get_button() !== Clutter.BUTTON_PRIMARY)
+                return Clutter.EVENT_PROPAGATE;
+
+            this._showApplications();
+            return Clutter.EVENT_STOP;
+        });
         return button;
     }
 
     _showApplications() {
-        if (Main.overview.visible) {
+        const showAppsButton = Main.overview.dash?.showAppsButton;
+
+        if (Main.overview.visible && showAppsButton?.checked) {
             Main.overview.hide();
             return;
         }
 
         Main.overview.show(OverviewControls.ControlsState.APP_GRID);
 
-        const showAppsButton = Main.overview.dash?.showAppsButton;
         if (showAppsButton)
             showAppsButton.checked = true;
     }
@@ -350,6 +451,7 @@ export default class UbuntuvnDesktopExtension extends Extension {
         this._settingSignals = [];
         this._dynamicTransparency = null;
         this._topTaskbar = null;
+        this._touchpadGestures = null;
         this._shellSettings = new Gio.Settings({schema_id: 'org.gnome.shell'});
         this._docksDisabledByUs = new Set();
         this._hotCorner = null;
@@ -367,6 +469,8 @@ export default class UbuntuvnDesktopExtension extends Extension {
 
         this._topTaskbar = new SafeTopTaskbar(this, this._settings);
         this._topTaskbar.enable();
+        this._touchpadGestures = new TouchpadGestures();
+        this._touchpadGestures.enable();
         this._addKeybindings();
         this._enableHotCorner();
         this._syncPanelStyle();
@@ -377,6 +481,8 @@ export default class UbuntuvnDesktopExtension extends Extension {
         this._restoreDocks();
         this._disableHotCorner();
         this._removeKeybindings();
+        this._touchpadGestures?.disable();
+        this._touchpadGestures = null;
         this._topTaskbar?.disable();
         this._topTaskbar = null;
         this._disableDynamicTransparency();
@@ -413,18 +519,10 @@ export default class UbuntuvnDesktopExtension extends Extension {
             Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
             () => this._togglePanelVisibility()
         );
-
-        Main.wm.addKeybinding(
-            'enable-window-tiling',
-            this._settings,
-            Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
-            Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
-            () => this._showLegacyTilingNotice()
-        );
     }
 
     _removeKeybindings() {
-        for (const name of ['toggle-material-shell-ui', 'enable-window-tiling']) {
+        for (const name of ['toggle-material-shell-ui']) {
             try {
                 Main.wm.removeKeybinding(name);
             } catch (error) {
@@ -473,13 +571,6 @@ export default class UbuntuvnDesktopExtension extends Extension {
 
         if (Main.layoutManager.panelBox)
             Main.layoutManager.panelBox.visible = this._panelVisible;
-    }
-
-    _showLegacyTilingNotice() {
-        Main.notify(
-            this.metadata.name,
-            'The legacy tiling module is disabled on GNOME 50 until it is ported from private GNOME 3 APIs.'
-        );
     }
 
     _syncDockState() {

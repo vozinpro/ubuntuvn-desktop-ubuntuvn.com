@@ -9,6 +9,7 @@ This branch has been ported for Ubuntu 26.04 / GNOME Shell 50 with a modern GNOM
 - Top-panel Ubuntuvn logo button.
 - Click the logo to open the GNOME app grid; click it again to return to the desktop.
 - Top-left hot corner opens the GNOME overview, like pressing the Super key.
+- Three-finger touchpad swipes toggle the overview or app grid.
 - Top-panel tasklist for running apps on the active workspace.
 - Minimized apps remain visible in the tasklist.
 - Windows are grouped by application.
@@ -21,7 +22,7 @@ This branch has been ported for Ubuntu 26.04 / GNOME Shell 50 with a modern GNOM
 
 ## Removed or disabled legacy features
 
-The old GNOME 3 modules for advanced tiling, gestures, previews, Places/system-menu changes, and YouTube search were removed or left disabled because they depended on private GNOME Shell internals that changed in GNOME 50.
+The old GNOME 3 modules for advanced tiling, previews, Places/system-menu changes, and YouTube search were removed or left disabled because they depended on private GNOME Shell internals that changed in GNOME 50.
 
 The login background reset script is also unsupported on modern Ubuntu because it modifies system GNOME Shell resources.
 

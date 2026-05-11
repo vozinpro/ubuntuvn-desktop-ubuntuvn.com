@@ -82,19 +82,13 @@ export default class UbuntuvnDesktopPreferences extends ExtensionPreferences {
         });
         activeGroup.add(toggleShortcutRow);
 
-        const tilingShortcutRow = new Adw.ActionRow({
-            title: 'Legacy tiling shortcut',
-            subtitle: `${settings.get_strv('enable-window-tiling').join(', ') || 'Unset'} — shows a compatibility notice on GNOME 50`,
-        });
-        activeGroup.add(tilingShortcutRow);
-
         page.add(activeGroup);
 
         const legacyGroup = new Adw.PreferencesGroup({
             title: 'Still disabled legacy modules',
         });
         legacyGroup.add(new Adw.ActionRow({
-            title: 'Advanced tiling, gestures, previews, and system menu tweaks',
+            title: 'Advanced tiling, previews, and system menu tweaks',
             subtitle: 'These GNOME 3 modules depend on private Shell internals and are not loaded on GNOME 50.',
         }));
         page.add(legacyGroup);

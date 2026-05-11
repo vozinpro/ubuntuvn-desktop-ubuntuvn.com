@@ -98,8 +98,8 @@
             <description/>
         </key>
         <key name="enable-window-tiling" type="as">
-            <default><![CDATA[['<Shift><Ctrl><Alt>t']]]></default>
-            <summary>Enable the window tiling system</summary>
+            <default>[]</default>
+            <summary>Legacy window tiling shortcut</summary>
             <description/>
         </key>
         <key name="extension-path" type="s">
