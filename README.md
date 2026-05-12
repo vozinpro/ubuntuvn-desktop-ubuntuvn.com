@@ -4,6 +4,11 @@ Ubuntuvn Desktop is the default desktop interface extension for the Ubuntuvn GNO
 
 This branch has been ported for Ubuntu 26.04 / GNOME Shell 50 with a modern GNOME Shell extension entrypoint and preferences UI. It keeps the visible Ubuntuvn desktop experience while avoiding legacy GNOME 3 private APIs that no longer work on current GNOME Shell releases.
 
+## Latest update
+
+- Restored GNOME 50-safe three-finger touchpad gestures for toggling the overview and app grid.
+- Disabled the old legacy window tiling shortcut because the GNOME 3 tiling module is not loaded on GNOME 50.
+
 ## Current features
 
 - Top-panel Ubuntuvn logo button.
